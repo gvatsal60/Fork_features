@@ -255,22 +255,24 @@ get_sdkman_platform() {
 }
 
 find_version_list() {
-    prefix="$1"
-    suffix="$2"
-    install_type=$3
-    ifLts="$4"
-    version_list=$5
-    java_ver=$6
+    install_type=$1
+    version_list=$2
+    java_ver=$3
 
-    check_packages jq
-    all_versions=$(curl -s https://api.adoptium.net/v3/info/available_releases)
-    if [ "${ifLts}" = "true" ]; then
-        major_version=$(echo "$all_versions" | jq -r '.most_recent_lts')
-    elif [ "${java_ver}" = "latest" ]; then
-        major_version=$(echo "$all_versions" | jq -r '.most_recent_feature_release')
+    if [ "${java_ver}" = "lts" ] || [ "${java_ver}" = "latest" ]; then
+        check_packages jq
+        major_versions=$(curl -s https://api.adoptium.net/v3/info/available_releases)
+        if [ "${java_ver}" = "lts" ]; then
+            major_version=$(echo "$major_versions" | jq -r '.most_recent_lts')
+        else
+            major_version=$(echo "$major_versions" | jq -r '.most_recent_feature_release')
+        fi
     else
         major_version=$(echo "$java_ver" | cut -d '.' -f 1)
     fi
+
+    platform="$(get_sdkman_platform)"
+    all_versions=$(curl -s "https://api.sdkman.io/2/candidates/${install_type}/${platform}/versions/all" | tr ',' '\n' | tr -d '\r')
 
     # Remove the hardcoded fallback as this fails for new jdk latest version released ex: 24
     # Related Issue: https://github.com/devcontainers/features/issues/1308
@@ -317,7 +319,7 @@ sdk_install() {
     elif echo "${requested_version}" | grep -oE "${full_version_check}" > /dev/null 2>&1; then
         echo "${requested_version}"
     else
-        find_version_list "$prefix" "$suffix" "$install_type" "false" version_list "${requested_version}"
+        find_version_list "$install_type" version_list "${requested_version}"
         if [ "${requested_version}" = "latest" ] || [ "${requested_version}" = "current" ]; then
             requested_version="$(echo "${version_list}" | head -n 1)"
         else
